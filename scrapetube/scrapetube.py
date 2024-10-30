@@ -1,6 +1,7 @@
 import json
 import time
 from typing import Generator
+from bs4 import BeautifulSoup
 
 import requests
 from typing_extensions import Literal
@@ -277,7 +278,44 @@ def get_ajax_data(
         "continuation": next_data["token"],
     }
     response = session.post(api_endpoint, params={"key": api_key}, json=data)
-    return response.json()
+    #return response.json()
+    try:
+        # Check if response is JSON
+        if response.headers.get("Content-Type") == "application/json":
+            return response.json()
+        else:
+            raise ValueError( f"Response content is not JSON: {response}" )
+        
+    except json.JSONDecodeError as e:
+        # Return detailed exception info if JSON decoding fails
+        print( f"JSONDecodeError: Could not decode response to JSON.")
+        print( f"Status Code: {response.status_code}" )
+        print( f"Response Text: {response.text}" )
+        print( f"URL: {response.url }")
+        raise e  # re-raise exception for handling higher up if needed
+
+    except ValueError as e:
+        # Handle non-JSON responses
+
+        # Parse HTML and extract the specific error message
+        soup = BeautifulSoup(response.text, "html.parser")
+        main_message = soup.find("div", style="margin-left: 4em;")  # This typically contains the main error message
+
+        if ( main_message ):
+            message_text = main_message.get_text( separator=" ", strip=True )
+        else:
+            # Fallback to all text if structure differs
+            message_text = soup.get_text( separator=" ", strip=True )
+
+        print()
+        print( f"ValueError: Expected JSON response but received different content.")
+        print( f"Status Code: {response.status_code}" )
+        #print( f"Content-Type: {response.headers.get("Content-Type")}" )
+        #print( f"Response Text:{response.text}" )
+        print("Extracted Message:", message_text)
+        print( f"URL: {response.url}" )
+        print()
+        raise e  # re-raise exception for handling higher up if needed
 
 
 def get_json_from_html(html: str, key: str, num_chars: int = 2, stop: str = '"') -> str:
